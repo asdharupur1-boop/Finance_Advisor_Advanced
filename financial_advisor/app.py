@@ -1,191 +1,170 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import math
 
 # Simple configuration
 st.set_page_config(
-    page_title="WealthGuide AI",
+    page_title="Simple Wealth Guide",
     page_icon="💰",
-    layout="wide"
+    layout="centered"
 )
 
-# Minimal CSS
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #2563eb;
-        text-align: center;
-        margin-bottom: 1rem;
-        font-weight: 700;
-    }
-    .metric-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .section-header {
-        font-size: 1.5rem;
-        color: #374151;
-        margin: 1.5rem 0 1rem 0;
-        font-weight: 600;
-    }
-</style>
-""", unsafe_allow_html=True)
+# No external CSS - using native Streamlit styling
+st.title("💰 Simple Wealth Guide")
+st.markdown("### Your Minimal Financial Companion")
 
-class SimpleFinancialAnalyzer:
-    def __init__(self, user_data):
-        self.user_data = user_data
+# Financial calculations without external libraries
+def calculate_future_value(monthly_investment, years, annual_return):
+    """Calculate future value of monthly investments"""
+    monthly_rate = annual_return / 100 / 12
+    months = years * 12
+    future_value = monthly_investment * ((1 + monthly_rate) ** months - 1) / monthly_rate
+    return future_value
+
+def analyze_finances(income, expenses_dict, investment_percent):
+    """Analyze financial health"""
+    total_expenses = sum(expenses_dict.values())
+    savings = income - total_expenses
+    savings_rate = (savings / income) * 100 if income > 0 else 0
+    investment_amount = income * (investment_percent / 100)
     
-    def calculate_metrics(self):
-        income = self.user_data['monthly_income']
-        expenses = sum(self.user_data['expenses'].values())
-        savings = income - expenses
-        savings_rate = (savings / income) * 100
-        
-        return {
-            'income': income,
-            'expenses': expenses,
-            'savings': savings,
-            'savings_rate': savings_rate,
-            'investment_amount': income * (self.user_data['investment_percentage'] / 100)
-        }
+    return {
+        'total_expenses': total_expenses,
+        'savings': savings,
+        'savings_rate': savings_rate,
+        'investment_amount': investment_amount
+    }
 
+# Main app
 def main():
-    # Clean Header
-    st.markdown('<div class="main-header">💰 WealthGuide AI</div>', unsafe_allow_html=True)
-    st.markdown("### Your Simple Financial Companion")
-    
     # Input Section
     with st.form("financial_input"):
+        st.subheader("📥 Your Financial Details")
+        
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Income & Investment")
-            monthly_income = st.number_input("Monthly Income (₹)", min_value=10000, value=50000, step=1000)
-            investment_percentage = st.slider("Investment Target (%)", 0, 50, 20)
+            monthly_income = st.number_input("Monthly Income (₹)", 
+                                           min_value=1000, value=50000, step=1000)
+            investment_percent = st.slider("Investment Target (%)", 0, 50, 15)
         
         with col2:
             st.subheader("Monthly Expenses")
             rent = st.number_input("Rent/EMI", value=15000, step=500)
-            groceries = st.number_input("Groceries", value=8000, step=500)
-            transportation = st.number_input("Transportation", value=4000, step=200)
-            utilities = st.number_input("Utilities", value=3000, step=200)
-            entertainment = st.number_input("Entertainment", value=5000, step=500)
-            other = st.number_input("Other Expenses", value=3000, step=200)
+            food = st.number_input("Food & Groceries", value=8000, step=500)
+            transport = st.number_input("Transport", value=4000, step=200)
+            other = st.number_input("Other Expenses", value=7000, step=500)
         
         submitted = st.form_submit_button("Analyze My Finances")
     
     if submitted:
-        user_data = {
-            'monthly_income': monthly_income,
-            'expenses': {
-                'rent': rent,
-                'groceries': groceries,
-                'transportation': transportation,
-                'utilities': utilities,
-                'entertainment': entertainment,
-                'other': other
-            },
-            'investment_percentage': investment_percentage
+        expenses = {
+            'Rent/EMI': rent,
+            'Food': food,
+            'Transport': transport,
+            'Other': other
         }
         
-        analyzer = SimpleFinancialAnalyzer(user_data)
-        metrics = analyzer.calculate_metrics()
+        results = analyze_finances(monthly_income, expenses, investment_percent)
         
-        # Display Key Metrics
+        # Display Results
         st.success("✅ Analysis Complete!")
         
+        st.subheader("📊 Financial Summary")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Monthly Income", f"₹{metrics['income']:,.0f}")
+            st.metric("Income", f"₹{monthly_income:,}")
         with col2:
-            st.metric("Total Expenses", f"₹{metrics['expenses']:,.0f}")
+            st.metric("Expenses", f"₹{results['total_expenses']:,}")
         with col3:
-            st.metric("Monthly Savings", f"₹{metrics['savings']:,.0f}")
+            st.metric("Savings", f"₹{results['savings']:,}")
         with col4:
-            st.metric("Savings Rate", f"{metrics['savings_rate']:.1f}%")
+            st.metric("Savings Rate", f"{results['savings_rate']:.1f}%")
         
-        # Visualizations
-        st.markdown('<div class="section-header">📊 Financial Overview</div>', unsafe_allow_html=True)
+        # Financial Health
+        st.subheader("❤️ Financial Health")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Expense Breakdown
-            expense_data = {
-                'Category': list(user_data['expenses'].keys()),
-                'Amount': list(user_data['expenses'].values())
-            }
-            df_expenses = pd.DataFrame(expense_data)
-            
-            fig = px.pie(df_expenses, values='Amount', names='Category', 
-                        title="Expense Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            # Income vs Expenses
-            categories = ['Income', 'Expenses', 'Savings']
-            amounts = [metrics['income'], metrics['expenses'], metrics['savings']]
-            
-            fig = px.bar(x=categories, y=amounts, 
-                        color=categories,
-                        color_discrete_map={'Income': '#10b981', 'Expenses': '#ef4444', 'Savings': '#3b82f6'},
-                        title="Income vs Expenses vs Savings")
-            fig.update_layout(xaxis_title="", yaxis_title="Amount (₹)")
-            st.plotly_chart(fig, use_container_width=True)
+        if results['savings_rate'] >= 20:
+            st.success("**Excellent!** You're saving more than 20% of your income.")
+        elif results['savings_rate'] >= 10:
+            st.warning("**Good!** Try to reach 20% savings rate.")
+        else:
+            st.error("**Needs improvement.** Focus on increasing your savings rate.")
         
         # Investment Section
-        st.markdown('<div class="section-header">💡 Investment Insights</div>', unsafe_allow_html=True)
+        st.subheader("💡 Investment Plan")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Monthly Investment")
-            st.info(f"**Target Investment:** ₹{metrics['investment_amount']:,.0f}")
+            st.write(f"**Monthly Investment Target:** ₹{results['investment_amount']:,.0f}")
             
-            if metrics['savings'] >= metrics['investment_amount']:
+            if results['savings'] >= results['investment_amount']:
                 st.success("🎯 You can meet your investment target!")
             else:
-                st.warning(f"⚠️ You need ₹{metrics['investment_amount'] - metrics['savings']:,.0f} more to meet your target")
+                shortfall = results['investment_amount'] - results['savings']
+                st.warning(f"⚠️ Shortfall: ₹{shortfall:,.0f}")
+                st.write("Consider reducing expenses or increasing income")
         
         with col2:
-            st.subheader("Quick Tips")
+            st.write("**Quick Tips:**")
             tips = [
-                "💡 Aim for 20% savings rate",
-                "📊 Track expenses weekly", 
-                "🎯 Automate your investments",
-                "🚀 Start emergency fund first"
+                "• Save at least 20% of income",
+                "• Build 6-month emergency fund",
+                "• Start investing early",
+                "• Avoid unnecessary debt"
             ]
             for tip in tips:
                 st.write(tip)
         
-        # Simple Projections
-        st.markdown('<div class="section-header">📈 Future Projections</div>', unsafe_allow_html=True)
+        # Future Projections
+        st.subheader("📈 Future Projections")
         
-        if metrics['investment_amount'] > 0:
-            # Simple SIP calculation
-            monthly_investment = metrics['investment_amount']
-            years = 10
-            expected_return = 12
-            
-            monthly_rate = expected_return / 100 / 12
-            months = years * 12
-            future_value = monthly_investment * (((1 + monthly_rate) ** months - 1) / monthly_rate)
+        if results['investment_amount'] > 0:
+            investment_amount = results['investment_amount']
             
             col1, col2, col3 = st.columns(3)
+            
             with col1:
-                st.metric("Monthly Investment", f"₹{monthly_investment:,.0f}")
+                # 5 years
+                future_5y = calculate_future_value(investment_amount, 5, 12)
+                st.metric("5 Years", f"₹{future_5y:,.0f}")
+            
             with col2:
-                st.metric("Investment Period", f"{years} years")
+                # 10 years
+                future_10y = calculate_future_value(investment_amount, 10, 12)
+                st.metric("10 Years", f"₹{future_10y:,.0f}")
+            
             with col3:
-                st.metric("Potential Value", f"₹{future_value:,.0f}")
+                # 15 years
+                future_15y = calculate_future_value(investment_amount, 15, 12)
+                st.metric("15 Years", f"₹{future_15y:,.0f}")
+        
+        # Expense Breakdown
+        st.subheader("💸 Expense Breakdown")
+        
+        for category, amount in expenses.items():
+            percentage = (amount / monthly_income) * 100
+            st.write(f"**{category}:** ₹{amount:,} ({percentage:.1f}%)")
+            
+            # Simple progress bar using text
+            bars = "█" * int(percentage / 5)  # Each █ represents 5%
+            st.progress(int(percentage))
+        
+        # Recommendations
+        st.subheader("🎯 Recommendations")
+        
+        if expenses['Rent/EMI'] / monthly_income > 0.3:
+            st.write("• **Consider:** Your rent is high. Look for more affordable options")
+        
+        if results['savings_rate'] < 15:
+            st.write("• **Action needed:** Focus on increasing your savings rate")
+        
+        if results['investment_amount'] == 0:
+            st.write("• **Start investing:** Even small amounts can grow significantly")
+        
+        st.write("• **Emergency fund:** Build 3-6 months of expenses as safety net")
+        st.write("• **Review regularly:** Check your finances monthly")
 
 if __name__ == "__main__":
     main()

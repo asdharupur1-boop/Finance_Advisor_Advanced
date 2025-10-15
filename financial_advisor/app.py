@@ -1,11 +1,18 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
+
+# Try to import Plotly with error handling
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("📊 Plotly not available. Using Streamlit native charts instead.")
 
 # Page configuration
 st.set_page_config(
@@ -73,16 +80,14 @@ class MutualFundAnalyzer:
         
         funds = []
         for category, base_return in categories.items():
-            for i in range(3):  # 3 funds per category
+            for i in range(3):
                 fund_name = f"{category} Fund {i+1}"
                 
-                # Generate realistic returns with some randomness
                 returns_6m = base_return * 0.5 + np.random.normal(0, 2)
                 returns_1y = base_return + np.random.normal(0, 3)
                 returns_3y = base_return + np.random.normal(0, 2)
                 returns_5y = base_return + np.random.normal(0, 1.5)
                 
-                # Risk based on category
                 risk_level = self.get_risk_level(category)
                 
                 funds.append({
@@ -115,10 +120,8 @@ class MutualFundAnalyzer:
         return risk_map.get(category, 'Moderate')
     
     def recommend_funds(self, savings_rate, investment_horizon, risk_appetite):
-        """Recommend funds based on user profile"""
         df = self.fund_data.copy()
         
-        # Filter based on risk appetite
         risk_filters = {
             'Conservative': ['Low', 'Moderate'],
             'Moderate': ['Low', 'Moderate', 'Moderately High'],
@@ -127,31 +130,25 @@ class MutualFundAnalyzer:
         
         filtered_funds = df[df['Risk Level'].isin(risk_filters.get(risk_appetite, ['Moderate']))]
         
-        # Select return column based on investment horizon
         return_columns = {
             '6 months': '6M Return',
             '1 year': '1Y Return', 
             '3 years': '3Y CAGR',
-            '5 years': '5Y CAGR',
-            '10 years': '5Y CAGR'  # Use 5Y as proxy for long term
+            '5 years': '5Y CAGR'
         }
         
         return_col = return_columns.get(investment_horizon, '3Y CAGR')
         
-        # Score funds based on savings rate and horizon
         filtered_funds['Score'] = (
             filtered_funds[return_col] * 0.6 +
             (100 - filtered_funds['Expense Ratio'] * 10) * 0.2 +
             (filtered_funds['5Y CAGR'] if return_col != '5Y CAGR' else 0) * 0.2
         )
         
-        # Get top recommendations
         recommendations = filtered_funds.nlargest(5, 'Score')
-        
         return recommendations
     
     def get_category_performance(self):
-        """Get category-wise average performance"""
         return self.fund_data.groupby('Category').agg({
             '6M Return': 'mean',
             '1Y Return': 'mean',
@@ -160,139 +157,20 @@ class MutualFundAnalyzer:
             'Risk Level': 'first'
         }).round(2).reset_index()
 
-class ComprehensiveFinancialAnalyzer:
-    def __init__(self, user_data):
-        self.user_data = user_data
-        self.mutual_fund_analyzer = MutualFundAnalyzer()
-        self.metrics = self.calculate_all_metrics()
+def create_simple_gauge(value, title, max_value=100):
+    """Create a simple gauge using Streamlit components"""
+    progress = value / max_value
+    color = "🟢" if progress > 0.7 else "🟡" if progress > 0.4 else "🔴"
     
-    def calculate_all_metrics(self):
-        income = self.user_data['monthly_income']
-        expenses = sum(self.user_data['expenses'].values())
-        savings = income - expenses
-        
-        # Feature 1: Basic Financial Metrics
-        savings_rate = (savings / income) * 100 if income > 0 else 0
-        
-        # Feature 2: Credit Score Simulation
-        credit_score = self.calculate_credit_score()
-        
-        # Feature 3: Investment Analysis
-        investment_metrics = self.analyze_investments()
-        
-        # Feature 4: Debt Analysis
-        debt_metrics = self.analyze_debt()
-        
-        # Feature 5: Risk Assessment
-        risk_profile = self.assess_risk()
-        
-        # Feature 6: Goal Planning
-        goal_metrics = self.analyze_goals()
-        
-        # Feature 7: Tax Optimization
-        tax_savings = self.calculate_tax_savings()
-        
-        # Feature 8: Emergency Fund Analysis
-        emergency_metrics = self.analyze_emergency_fund()
-        
-        # Feature 9: Retirement Planning
-        retirement_metrics = self.analyze_retirement()
-        
-        # Feature 10: Spending Pattern Analysis
-        spending_patterns = self.analyze_spending_patterns()
-        
-        # Feature 11: Mutual Fund Recommendations
-        mutual_fund_recommendations = self.get_mutual_fund_recommendations(savings_rate)
-        
-        return {
-            'basic': {
-                'income': income, 'expenses': expenses, 'savings': savings,
-                'savings_rate': savings_rate, 'investment_amount': income * (self.user_data['investment_percentage'] / 100)
-            },
-            'credit_score': credit_score,
-            'investment': investment_metrics,
-            'debt': debt_metrics,
-            'risk': risk_profile,
-            'goals': goal_metrics,
-            'tax': tax_savings,
-            'emergency': emergency_metrics,
-            'retirement': retirement_metrics,
-            'spending': spending_patterns,
-            'mutual_funds': mutual_fund_recommendations
-        }
-    
-    def get_mutual_fund_recommendations(self, savings_rate):
-        """Get personalized mutual fund recommendations"""
-        # Determine risk appetite based on savings rate
-        if savings_rate >= 30:
-            risk_appetite = 'Aggressive'
-        elif savings_rate >= 15:
-            risk_appetite = 'Moderate'
-        else:
-            risk_appetite = 'Conservative'
-        
-        # Get recommendations for different time horizons
-        horizons = ['6 months', '1 year', '3 years', '5 years']
-        recommendations = {}
-        
-        for horizon in horizons:
-            recs = self.mutual_fund_analyzer.recommend_funds(
-                savings_rate, horizon, risk_appetite
-            )
-            recommendations[horizon] = recs.to_dict('records')
-        
-        category_performance = self.mutual_fund_analyzer.get_category_performance()
-        
-        return {
-            'risk_appetite': risk_appetite,
-            'recommendations': recommendations,
-            'category_performance': category_performance.to_dict('records'),
-            'all_funds': self.mutual_fund_analyzer.fund_data.to_dict('records')
-        }
-    
-    def calculate_credit_score(self):
-        # ... (keep existing credit score code) ...
-        return {'score': 750, 'category': 'Good', 'factors': {}}
-    
-    def analyze_investments(self):
-        # ... (keep existing investment analysis code) ...
-        return {}
-    
-    def analyze_debt(self):
-        # ... (keep existing debt analysis code) ...
-        return {}
-    
-    def assess_risk(self):
-        # ... (keep existing risk assessment code) ...
-        return {}
-    
-    def analyze_goals(self):
-        # ... (keep existing goals code) ...
-        return {}
-    
-    def calculate_tax_savings(self):
-        # ... (keep existing tax code) ...
-        return {}
-    
-    def analyze_emergency_fund(self):
-        # ... (keep existing emergency fund code) ...
-        return {}
-    
-    def analyze_retirement(self):
-        # ... (keep existing retirement code) ...
-        return {}
-    
-    def analyze_spending_patterns(self):
-        # ... (keep existing spending analysis code) ...
-        return {}
+    st.write(f"**{title}**: {value:.1f} / {max_value} {color}")
+    st.progress(progress)
 
-def display_mutual_funds(metrics):
+def display_mutual_funds_with_fallback(metrics):
     st.markdown('<div class="feature-card">', unsafe_allow_html=True)
     st.header("📈 Mutual Fund Analysis & Recommendations")
     
     mf_data = metrics['mutual_funds']
     
-    # Risk Appetite
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Recommended Risk Appetite", mf_data['risk_appetite'])
@@ -303,9 +181,13 @@ def display_mutual_funds(metrics):
     st.subheader("🏆 Category-wise Performance")
     category_df = pd.DataFrame(mf_data['category_performance'])
     
-    fig = px.bar(category_df, x='Category', y=['6M Return', '1Y Return', '3Y CAGR', '5Y CAGR'],
-                title="Average Returns by Fund Category", barmode='group')
-    st.plotly_chart(fig, use_container_width=True)
+    if PLOTLY_AVAILABLE:
+        fig = px.bar(category_df, x='Category', y=['6M Return', '1Y Return', '3Y CAGR', '5Y CAGR'],
+                    title="Average Returns by Fund Category", barmode='group')
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        # Fallback: Show data table
+        st.dataframe(category_df, use_container_width=True)
     
     # Time-based Recommendations
     st.subheader("🎯 Personalized Fund Recommendations")
@@ -346,9 +228,8 @@ def display_mutual_funds(metrics):
                     
                     st.markdown("---")
     
-    # Interactive Fund Explorer
+    # Fund Explorer
     st.subheader("🔍 Mutual Fund Explorer")
-    
     all_funds_df = pd.DataFrame(mf_data['all_funds'])
     
     col1, col2 = st.columns(2)
@@ -357,49 +238,30 @@ def display_mutual_funds(metrics):
     with col2:
         selected_risk = st.selectbox("Filter by Risk", ['All'] + list(all_funds_df['Risk Level'].unique()))
     
-    # Apply filters
     filtered_funds = all_funds_df.copy()
     if selected_category != 'All':
         filtered_funds = filtered_funds[filtered_funds['Category'] == selected_category]
     if selected_risk != 'All':
         filtered_funds = filtered_funds[filtered_funds['Risk Level'] == selected_risk]
     
-    # Display filtered funds
     if not filtered_funds.empty:
         st.dataframe(
             filtered_funds[['Fund Name', 'Category', '1Y Return', '3Y CAGR', '5Y CAGR', 'Risk Level', 'Expense Ratio']],
-            use_container_width=True
+            use_container_width=True,
+            height=300
         )
     else:
         st.info("No funds match the selected criteria.")
-    
-    # Performance Comparison Chart
-    st.subheader("📊 Performance Comparison")
-    
-    if not filtered_funds.empty:
-        fig = go.Figure()
-        
-        for _, fund in filtered_funds.iterrows():
-            fig.add_trace(go.Scatter(
-                x=['6M', '1Y', '3Y', '5Y'],
-                y=[fund['6M Return'], fund['1Y Return'], fund['3Y CAGR'], fund['5Y CAGR']],
-                mode='lines+markers',
-                name=fund['Fund Name']
-            ))
-        
-        fig.update_layout(
-            title="Fund Performance Comparison",
-            xaxis_title="Time Period",
-            yaxis_title="Returns (%)",
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
 def main():
     st.markdown('<div class="main-header">🏆 WealthMaster AI</div>', unsafe_allow_html=True)
-    st.markdown("### Complete Financial Analysis Suite - Now with Mutual Fund Intelligence")
+    st.markdown("### Complete Financial Analysis Suite with Mutual Fund Intelligence")
+    
+    # Show Plotly status
+    if not PLOTLY_AVAILABLE:
+        st.info("🔧 Using simplified visualizations. For enhanced charts, ensure Plotly is installed.")
     
     # User Input Section
     with st.sidebar:
@@ -431,80 +293,101 @@ def main():
     }
     
     if st.button("🚀 Run Complete Financial Analysis", use_container_width=True):
-        analyzer = ComprehensiveFinancialAnalyzer(user_data)
-        metrics = analyzer.metrics
+        # Initialize analyzer
+        analyzer = MutualFundAnalyzer()
         
-        # Display all features in tabs - ADD MUTUAL FUNDS TAB
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
-            "📈 Overview", "💳 Credit Score", "💰 Investments", "🏦 Debt Analysis", 
-            "⚡ Risk Profile", "🎯 Goals", "🧾 Tax Planning", "🛡️ Emergency Fund",
-            "👵 Retirement", "📊 Spending", "📈 Mutual Funds"  # NEW TAB
-        ])
+        # Calculate basic metrics
+        income = user_data['monthly_income']
+        total_expenses = sum(user_data['expenses'].values())
+        savings = income - total_expenses
+        savings_rate = (savings / income) * 100
+        
+        # Get mutual fund recommendations
+        if savings_rate >= 30:
+            risk_appetite = 'Aggressive'
+        elif savings_rate >= 15:
+            risk_appetite = 'Moderate'
+        else:
+            risk_appetite = 'Conservative'
+        
+        horizons = ['6 months', '1 year', '3 years', '5 years']
+        recommendations = {}
+        
+        for horizon in horizons:
+            recs = analyzer.recommend_funds(savings_rate, horizon, risk_appetite)
+            recommendations[horizon] = recs.to_dict('records')
+        
+        category_performance = analyzer.get_category_performance()
+        
+        metrics = {
+            'basic': {
+                'income': income,
+                'expenses': total_expenses,
+                'savings': savings,
+                'savings_rate': savings_rate,
+                'investment_amount': income * (user_data['investment_percentage'] / 100)
+            },
+            'mutual_funds': {
+                'risk_appetite': risk_appetite,
+                'recommendations': recommendations,
+                'category_performance': category_performance.to_dict('records'),
+                'all_funds': analyzer.fund_data.to_dict('records')
+            }
+        }
+        
+        # Display results in tabs
+        tab1, tab2 = st.tabs(["📈 Financial Overview", "📊 Mutual Funds"])
         
         with tab1:
-            display_overview(metrics, user_data)
+            display_financial_overview(metrics, user_data)
+        
         with tab2:
-            display_credit_score(metrics['credit_score'])
-        with tab3:
-            display_investments(metrics['investment'])
-        with tab4:
-            display_debt_analysis(metrics['debt'])
-        with tab5:
-            display_risk_profile(metrics['risk'])
-        with tab6:
-            display_goals(metrics['goals'])
-        with tab7:
-            display_tax_planning(metrics['tax'])
-        with tab8:
-            display_emergency_fund(metrics['emergency'])
-        with tab9:
-            display_retirement(metrics['retirement'])
-        with tab10:
-            display_spending_analysis(metrics['spending'])
-        with tab11:  # NEW MUTUAL FUNDS TAB
-            display_mutual_funds(metrics)
+            display_mutual_funds_with_fallback(metrics)
 
-# ... (keep all existing display functions exactly as they were) ...
-
-def display_overview(metrics, user_data):
-    # ... (existing overview code) ...
-    pass
-
-def display_credit_score(credit_data):
-    # ... (existing credit score code) ...
-    pass
-
-def display_investments(investment_data):
-    # ... (existing investments code) ...
-    pass
-
-def display_debt_analysis(debt_data):
-    # ... (existing debt analysis code) ...
-    pass
-
-def display_risk_profile(risk_data):
-    # ... (existing risk profile code) ...
-    pass
-
-def display_goals(goals_data):
-    # ... (existing goals code) ...
-    pass
-
-def display_tax_planning(tax_data):
-    # ... (existing tax planning code) ...
-    pass
-
-def display_emergency_fund(emergency_data):
-    # ... (existing emergency fund code) ...
-    pass
-
-def display_retirement(retirement_data):
-    # ... (existing retirement code) ...
-    pass
-
-def display_spending_analysis(spending_data):
-    # ... (existing spending analysis code) ...
-    pass
+def display_financial_overview(metrics, user_data):
+    st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+    st.header("📈 Financial Overview")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Monthly Income", f"₹{metrics['basic']['income']:,.0f}")
+    with col2:
+        st.metric("Total Expenses", f"₹{metrics['basic']['expenses']:,.0f}")
+    with col3:
+        st.metric("Monthly Savings", f"₹{metrics['basic']['savings']:,.0f}")
+    with col4:
+        st.metric("Savings Rate", f"{metrics['basic']['savings_rate']:.1f}%")
+    
+    # Financial Health Score
+    health_score = min(100, metrics['basic']['savings_rate'] * 2 + 40)
+    
+    if PLOTLY_AVAILABLE:
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=health_score,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Financial Health Score"},
+            gauge={'axis': {'range': [0, 100]},
+                   'bar': {'color': "#4ECDC4"},
+                   'steps': [{'range': [0, 40], 'color': "lightcoral"},
+                            {'range': [40, 70], 'color': "lightyellow"},
+                            {'range': [70, 100], 'color': "lightgreen"}]}
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        create_simple_gauge(health_score, "Financial Health Score")
+    
+    # Expense Breakdown
+    st.subheader("💸 Expense Breakdown")
+    expenses = user_data['expenses']
+    
+    for category, amount in expenses.items():
+        percentage = (amount / metrics['basic']['income']) * 100
+        st.write(f"**{category.replace('_', ' ').title()}**: ₹{amount:,} ({percentage:.1f}%)")
+        st.progress(percentage / 100)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
